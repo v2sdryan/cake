@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數學小達人 - P3 數學挑戰</title>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0f9ff;
+            user-select: none;
+        }
+        .game-card {
+            transition: all 0.3s ease;
+        }
+        .game-card:hover {
+            transform: translateY(-5px);
+        }
+        .water-anim {
+            transition: height 1s ease-in-out, y 1s ease-in-out;
+        }
+        .confetti {
+            position: fixed;
+            width: 15px;
+            height: 15px;
+            background-color: #f00;
+            animation: fall 2s linear forwards;
+            z-index: 100;
+        }
+        @keyframes fall {
+            0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- Utility Components ---
+
+        const Button = ({ onClick, children, className, color = "blue", disabled = false }) => {
+            // Updated colors to include pink and fix contrast for yellow
+            const colors = {
+                blue: "bg-blue-500 hover:bg-blue-600 border-blue-700 text-white",
+                green: "bg-green-500 hover:bg-green-600 border-green-700 text-white",
+                yellow: "bg-yellow-400 hover:bg-yellow-500 border-yellow-600 text-yellow-900", // Dark text for visibility
+                red: "bg-red-400 hover:bg-red-500 border-red-600 text-white",
+                purple: "bg-purple-500 hover:bg-purple-600 border-purple-700 text-white",
+                pink: "bg-pink-400 hover:bg-pink-500 border-pink-600 text-white", // Added pink definition
+                gray: "bg-gray-400 border-gray-600 cursor-not-allowed text-white",
+            };
+            const activeColor = disabled ? colors.gray : (colors[color] || colors.blue);
+            
+            return (
+                <button 
+                    onClick={onClick}
+                    disabled={disabled}
+                    className={`${activeColor} font-bold py-3 px-6 rounded-2xl border-b-4 active:border-b-0 active:translate-y-1 transition-all shadow-lg text-lg w-full ${className}`}
+                >
+                    {children}
+                </button>
+            );
+        };
+
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-3xl shadow-xl p-6 border-4 border-blue-100 ${className}`}>
+                {children}
+            </div>
+        );
+
+        const ResultScreen = ({ score, total, onRestart, onHome }) => {
+            const percentage = (score / total) * 100;
+            let message = "";
+            let emoji = "";
+
+            if (percentage === 100) {
+                message = "太完美了！你是數學天才！";
+                emoji = "🏆";
+            } else if (percentage >= 80) {
+                message = "做得很好！繼續保持！";
+                emoji = "🌟";
+            } else if (percentage >= 60) {
+                message = "不錯喔！再努力一點點！";
+                emoji = "👍";
+            } else {
+                message = "別氣餒，再試一次會更好！";
+                emoji = "💪";
+            }
+
+            return (
+                <Card className="text-center animate-fade-in">
+                    <div className="text-6xl mb-4">{emoji}</div>
+                    <h2 className="text-3xl font-bold text-gray-800 mb-2">挑戰完成！</h2>
+                    <div className="text-xl text-gray-600 mb-6">{message}</div>
+                    
+                    <div className="bg-yellow-50 rounded-xl p-6 mb-8 border-2 border-yellow-200">
+                        <div className="text-gray-500 font-bold mb-1">你的成績</div>
+                        <div className="text-5xl font-black text-yellow-600">
+                            {score} <span className="text-2xl text-gray-400">/ {total}</span>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-4">
+                        <Button onClick={onRestart} color="green">🔄 再玩一次</Button>
+                        <Button onClick={onHome} color="blue">🏠 返回主選單</Button>
+                    </div>
+                </Card>
+            );
+        };
+
+        // --- Beaker Component (SVG) ---
+        const Beaker = ({ capacity, level, label, highlightEmpty }) => {
+            const percentage = (level / capacity) * 100;
+            const waterHeight = percentage * 1.5; 
+            const waterY = 150 - waterHeight;
+
+            return (
+                <div className="flex flex-col items-center mx-2 transform scale-90 sm:scale-100">
+                    <div className="relative">
+                        <svg width="100" height="160" viewBox="0 0 100 160">
+                            {/* Empty space highlight if needed */}
+                            {highlightEmpty && (
+                                <rect x="12" y="0" width="76" height={waterY} fill="#fcd34d" fillOpacity="0.2" />
+                            )}
+                            
+                            {/* Glass container */}
+                            <path d="M10,5 L10,150 Q10,155 15,155 L85,155 Q90,155 90,150 L90,5" 
+                                  fill="none" stroke="#333" strokeWidth="3" strokeLinecap="round" />
+                            
+                            {/* Water */}
+                            <rect x="12" y={waterY} width="76" height={waterHeight} 
+                                  fill="#3b82f6" fillOpacity="0.6" className="water-anim" />
+                            
+                            {/* Graduations */}
+                            {[0.2, 0.4, 0.6, 0.8, 1.0].map((tick, i) => (
+                                <g key={i}>
+                                    <line x1="10" y1={150 - (tick * 150)} x2="30" y2={150 - (tick * 150)} stroke="#333" strokeWidth="2" />
+                                    <text x="35" y={150 - (tick * 150) + 4} fontSize="10" fill={tick === 1.0 ? "#000" : "#666"} fontWeight={tick === 1.0 ? "bold" : "normal"}>{capacity * tick}</text>
+                                </g>
+                            ))}
+                            
+                            {/* Top Label */}
+                            <text x="50" y="15" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#333">{label}</text>
+                        </svg>
+                    </div>
+                    {/* Text labels removed - students must read the scale */}
+                </div>
+            );
+        };
+
+        // --- Game Logic: Volume ---
+        const VolumeGame = ({ onBack, onScore }) => {
+            const TOTAL_QUESTIONS = 10;
+            const [qIndex, setQIndex] = useState(1);
+            const [correctCount, setCorrectCount] = useState(0);
+            const [isFinished, setIsFinished] = useState(false);
+            const [problem, setProblem] = useState(null);
+            const [feedback, setFeedback] = useState(null);
+
+            const generateProblem = () => {
+                const cap1 = 500;
+                const cap2 = 1000;
+                const level1 = Math.floor(Math.random() * 8 + 1) * 50; 
+                const level2 = Math.floor(Math.random() * 8 + 1) * 100;
+                
+                // Randomly choose question type: 'sum' or 'fill'
+                const type = Math.random() > 0.5 ? 'sum' : 'fill';
+                
+                let answer;
+                if (type === 'sum') {
+                    answer = level1 + level2;
+                } else {
+                    // How much more to fill BOTH beakers
+                    const needed1 = cap1 - level1;
+                    const needed2 = cap2 - level2;
+                    answer = needed1 + needed2;
+                }
+                
+                let choices = new Set([answer]);
+                while(choices.size < 3) {
+                    const offset = (Math.random() > 0.5 ? 1 : -1) * (Math.random() > 0.5 ? 50 : 100);
+                    const wrong = answer + offset;
+                    if (wrong > 0 && wrong !== answer) choices.add(wrong);
+                }
+
+                setProblem({
+                    type,
+                    beakers: [
+                        { capacity: cap1, level: level1, label: "A" },
+                        { capacity: cap2, level: level2, label: "B" }
+                    ],
+                    answer: answer,
+                    choices: Array.from(choices).sort(() => Math.random() - 0.5)
+                });
+                setFeedback(null);
+            };
+
+            useEffect(() => {
+                generateProblem();
+            }, []);
+
+            const handleAnswer = (choice) => {
+                if (feedback) return;
+                
+                const isCorrect = choice === problem.answer;
+                
+                if (isCorrect) {
+                    setFeedback('correct');
+                    setCorrectCount(c => c + 1);
+                    onScore(10); 
+                } else {
+                    setFeedback('wrong');
+                }
+
+                setTimeout(() => {
+                    if (qIndex >= TOTAL_QUESTIONS) {
+                        setIsFinished(true);
+                    } else {
+                        setQIndex(prev => prev + 1);
+                        generateProblem();
+                    }
+                }, 3000); // Allow longer time to see explanation
+            };
+
+            const restartGame = () => {
+                setQIndex(1);
+                setCorrectCount(0);
+                setIsFinished(false);
+                generateProblem();
+            };
+
+            if (isFinished) {
+                return <ResultScreen score={correctCount} total={TOTAL_QUESTIONS} onRestart={restartGame} onHome={onBack} />;
+            }
+
+            if (!problem) return <div>Loading...</div>;
+
+            const isFillType = problem.type === 'fill';
+
+            return (
+                <div className="max-w-md mx-auto">
+                    <div className="flex justify-between items-center mb-4">
+                        <button onClick={onBack} className="text-gray-500 hover:text-gray-700">⬅ 放棄</button>
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-bold">
+                            第 {qIndex} / {TOTAL_QUESTIONS} 題
+                        </span>
+                    </div>
+
+                    <Card className={`mb-6 border-4 ${isFillType ? 'border-yellow-200' : 'border-blue-100'}`}>
+                        <div className="mb-4">
+                             {isFillType ? (
+                                <h2 className="text-xl font-bold text-center text-gray-800">
+                                    <span className="inline-block bg-yellow-100 text-yellow-800 px-2 rounded mb-2 text-sm">進階題</span><br/>
+                                    要再加入多少水，<br/>才能把<span className="text-red-500 underline decoration-wavy">兩個量杯都裝滿</span>？
+                                </h2>
+                            ) : (
+                                <h2 className="text-xl font-bold text-center text-gray-800">
+                                    把兩個量杯的水倒在一起，<br/>總共有多少毫升？
+                                </h2>
+                            )}
+                        </div>
+                        
+                        <div className="flex justify-center items-end gap-1 sm:gap-2 mb-6">
+                            <Beaker {...problem.beakers[0]} highlightEmpty={isFillType} />
+                            <div className="text-4xl text-gray-400 font-bold mb-10">+</div>
+                            <Beaker {...problem.beakers[1]} highlightEmpty={isFillType} />
+                        </div>
+
+                        {feedback === 'correct' && (
+                            <div className="text-center text-green-600 font-bold text-2xl animate-bounce mb-4">
+                                🎉 答對了！
+                            </div>
+                        )}
+                        {feedback === 'wrong' && (
+                            <div className="text-center bg-red-50 p-2 rounded-lg mb-4">
+                                <div className="text-red-500 font-bold text-xl shake">
+                                    ❌ 答案是 {problem.answer} mL
+                                </div>
+                                {isFillType && (
+                                    <div className="text-sm text-gray-600 mt-2 bg-white/50 p-2 rounded">
+                                        <div className="font-bold mb-1">💡 計算方法：</div>
+                                        <div>
+                                            {problem.beakers[0].capacity - problem.beakers[0].level} + {problem.beakers[1].capacity - problem.beakers[1].level} = {problem.answer}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            (A杯欠{problem.beakers[0].capacity - problem.beakers[0].level} + B杯欠{problem.beakers[1].capacity - problem.beakers[1].level})
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-3">
+                            {problem.choices.map((choice, i) => (
+                                <Button 
+                                    key={i} 
+                                    onClick={() => handleAnswer(choice)}
+                                    color={feedback === 'correct' && choice === problem.answer ? "green" : (isFillType ? "yellow" : "blue")}
+                                    disabled={feedback !== null}
+                                    className={feedback === 'wrong' && choice !== problem.answer ? "opacity-30" : ""}
+                                >
+                                    {choice} mL
+                                </Button>
+                            ))}
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        // --- Game Logic: Fractions ---
+        const FractionGame = ({ onBack, onScore }) => {
+            const TOTAL_QUESTIONS = 10;
+            const [qIndex, setQIndex] = useState(1);
+            const [correctCount, setCorrectCount] = useState(0);
+            const [isFinished, setIsFinished] = useState(false);
+            const [problem, setProblem] = useState(null);
+            const [feedback, setFeedback] = useState(null);
+
+            const generateProblem = () => {
+                const flavors = [
+                    { name: "布丁", emoji: "🍮", type1: "焦糖味", type2: "牛奶味", type3: "原味" },
+                    { name: "冬甩", emoji: "🍩", type1: "朱古力", type2: "草莓味", type3: "糖霜味" },
+                    { name: "曲奇", emoji: "🍪", type1: "牛油味", type2: "果仁味", type3: "朱古力豆" }
+                ];
+                
+                const theme = flavors[Math.floor(Math.random() * flavors.length)];
+                let total, frac1, frac2, count1, count2;
+                
+                const multiplier = Math.floor(Math.random() * 5 + 4); 
+                
+                const scenario = Math.random();
+                if (scenario > 0.5) {
+                    // Scenario A: 1/4 and 1/2
+                    total = multiplier * 4;
+                    frac1 = { num: 1, den: 4, text: "1/4" };
+                    frac2 = { num: 1, den: 2, text: "1/2" };
+                } else {
+                    // Scenario B: 1/8 and 1/2
+                    total = multiplier * 8;
+                    frac1 = { num: 1, den: 8, text: "1/8" };
+                    frac2 = { num: 1, den: 2, text: "1/2" };
+                }
+
+                count1 = total * (frac1.num / frac1.den);
+                count2 = total * (frac2.num / frac2.den);
+                const answer = total - count1 - count2;
+
+                let choices = new Set([answer]);
+                while(choices.size < 3) {
+                    const wrong = answer + (Math.random() > 0.5 ? 2 : -2) + Math.floor(Math.random() * 5);
+                    if (wrong > 0 && wrong !== answer) choices.add(wrong);
+                }
+
+                setProblem({
+                    theme, total, frac1, frac2, count1, count2, answer,
+                    choices: Array.from(choices).sort(() => Math.random() - 0.5)
+                });
+                setFeedback(null);
+            };
+
+            useEffect(() => {
+                generateProblem();
+            }, []);
+
+            const handleAnswer = (choice) => {
+                if (feedback) return;
+
+                const isCorrect = choice === problem.answer;
+
+                if (isCorrect) {
+                    setFeedback('correct');
+                    setCorrectCount(c => c + 1);
+                    onScore(10);
+                } else {
+                    setFeedback('wrong');
+                }
+
+                setTimeout(() => {
+                    if (qIndex >= TOTAL_QUESTIONS) {
+                        setIsFinished(true);
+                    } else {
+                        setQIndex(prev => prev + 1);
+                        generateProblem();
+                    }
+                }, 3500); // 延長時間讓學生看解釋
+            };
+
+            const restartGame = () => {
+                setQIndex(1);
+                setCorrectCount(0);
+                setIsFinished(false);
+                generateProblem();
+            };
+
+            if (isFinished) {
+                return <ResultScreen score={correctCount} total={TOTAL_QUESTIONS} onRestart={restartGame} onHome={onBack} />;
+            }
+
+            if (!problem) return <div>Loading...</div>;
+
+            return (
+                <div className="max-w-md mx-auto">
+                    <div className="flex justify-between items-center mb-4">
+                        <button onClick={onBack} className="text-gray-500 hover:text-gray-700">⬅ 放棄</button>
+                        <span className="bg-pink-100 text-pink-800 px-3 py-1 rounded-lg font-bold">
+                             第 {qIndex} / {TOTAL_QUESTIONS} 題
+                        </span>
+                    </div>
+
+                    <Card className="mb-6 border-pink-100">
+                        <div className="text-6xl text-center mb-4">{problem.theme.emoji}</div>
+                        <h2 className="text-lg font-bold text-gray-800 leading-relaxed mb-4">
+                            便利店有 <span className="text-pink-600 text-2xl">{problem.total}</span> 個{problem.theme.name}。
+                            <br/><br/>
+                            <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                                🔸 其中的 <span className="font-bold text-blue-600">{problem.frac1.text}</span> 是{problem.theme.type1}<br/>
+                                🔹 <span className="font-bold text-blue-600">{problem.frac2.text}</span> 是{problem.theme.type2}
+                            </div>
+                            <br/>
+                            其餘是<span className="underline decoration-wavy decoration-pink-400">{problem.theme.type3}</span>。
+                            <br/>
+                            請問{problem.theme.type3}{problem.theme.name}有多少個？
+                        </h2>
+
+                        {feedback === 'correct' && (
+                            <div className="mb-4 bg-green-50 p-3 rounded-lg border border-green-200 animate-pulse text-center">
+                                <p className="text-green-700 font-bold text-xl mb-1">🎉 答對了！</p>
+                                <p className="text-green-800 font-mono font-bold text-lg">
+                                    {problem.total} - {problem.count1} - {problem.count2} = {problem.answer}
+                                </p>
+                            </div>
+                        )}
+                        {feedback === 'wrong' && (
+                            <div className="mb-4 bg-red-50 p-4 rounded-lg border border-red-200 text-center">
+                                <p className="text-red-600 font-bold text-xl mb-2">❌ 正確答案是 {problem.answer}</p>
+                                
+                                <div className="bg-white/60 rounded-lg p-2">
+                                    <p className="text-gray-600 font-bold text-sm mb-1">💡 計算方法：</p>
+                                    <p className="text-gray-800 font-mono font-bold text-lg mb-2">
+                                        {problem.total} - {problem.count1} - {problem.count2} = {problem.answer}
+                                    </p>
+                                    <div className="text-xs text-gray-500 space-y-1 text-left px-4">
+                                        <p>🔸 {problem.theme.type1}: {problem.total} × {problem.frac1.text} = {problem.count1}個</p>
+                                        <p>🔹 {problem.theme.type2}: {problem.total} × {problem.frac2.text} = {problem.count2}個</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-3 gap-2">
+                            {problem.choices.map((choice, i) => (
+                                <Button 
+                                    key={i} 
+                                    onClick={() => handleAnswer(choice)}
+                                    color="pink"
+                                    disabled={feedback !== null}
+                                    className={`text-2xl ${feedback === 'wrong' && choice !== problem.answer ? "opacity-30" : ""}`}
+                                >
+                                    {choice}
+                                </Button>
+                            ))}
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+        const App = () => {
+            const [screen, setScreen] = useState('menu'); // menu, volume, fraction
+            const [score, setScore] = useState(0);
+
+            const handleScore = (points) => {
+                setScore(s => s + points);
+                // Trigger confetti effect
+                for(let i=0; i<5; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + 'vw';
+                    confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                    confetti.style.animationDuration = (Math.random() * 2 + 1) + 's';
+                    document.body.appendChild(confetti);
+                    setTimeout(() => confetti.remove(), 3000);
+                }
+            };
+
+            return (
+                <div className="min-h-screen p-4 flex flex-col items-center">
+                    {/* Header */}
+                    <div className="w-full max-w-md flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                        <h1 className="text-xl font-bold text-gray-700 tracking-tight">🎓 小學數學王</h1>
+                        <div className="bg-yellow-100 text-yellow-700 px-4 py-1 rounded-full font-bold border border-yellow-200 flex items-center gap-2">
+                            <span>⭐</span> 
+                            <span>{score}</span>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="w-full">
+                        {screen === 'menu' && (
+                            <div className="max-w-md mx-auto space-y-6 animate-fade-in">
+                                <div className="text-center mb-8">
+                                    <p className="text-gray-500 mb-2">請選擇挑戰模式</p>
+                                    <div className="text-6xl mb-4 animate-bounce" style={{animationDuration: '3s'}}>🤔</div>
+                                </div>
+                                
+                                <Card className="cursor-pointer group hover:border-blue-300 transition-all" >
+                                    <div onClick={() => setScreen('volume')} className="flex items-center gap-4">
+                                        <div className="text-4xl bg-blue-100 p-4 rounded-2xl group-hover:scale-110 transition-transform">💧</div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-gray-800">量杯大挑戰</h3>
+                                            <p className="text-gray-500 text-sm">每局 10 題 • 包含加法與補數題</p>
+                                        </div>
+                                    </div>
+                                </Card>
+
+                                <Card className="cursor-pointer group hover:border-pink-300 border-pink-100 transition-all">
+                                    <div onClick={() => setScreen('fraction')} className="flex items-center gap-4">
+                                        <div className="text-4xl bg-pink-100 p-4 rounded-2xl group-hover:scale-110 transition-transform">🍮</div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-gray-800">美味布丁店</h3>
+                                            <p className="text-gray-500 text-sm">每局 10 題 • 分數應用</p>
+                                        </div>
+                                    </div>
+                                </Card>
+                            </div>
+                        )}
+
+                        {screen === 'volume' && <VolumeGame onBack={() => setScreen('menu')} onScore={handleScore} />}
+                        {screen === 'fraction' && <FractionGame onBack={() => setScreen('menu')} onScore={handleScore} />}
+                    </div>
+
+                    <footer className="mt-12 text-gray-400 text-sm text-center">
+                        適合 P3 學生 • 根據學校工作紙設計
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
